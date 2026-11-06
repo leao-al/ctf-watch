@@ -1,0 +1,51 @@
+name: CTF watch
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Só enviar notificação de teste"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ctf-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restaurar estado
+        uses: actions/cache/restore@v4
+        with:
+          path: ctfd_state.json
+          key: ctfd-state-${{ github.run_id }}
+          restore-keys: ctfd-state-
+
+      - name: Verificar CTF
+        env:
+          CTFD_URL: ${{ vars.CTFD_URL }}
+          CTFD_TOKEN: ${{ secrets.CTFD_TOKEN }}
+          CTFD_SESSION: ${{ secrets.CTFD_SESSION }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FAIL_ALERT_AFTER: "3"
+        run: |
+          if [ "${{ inputs.test }}" = "true" ]; then
+            python3 ctfd_watch.py --test
+          else
+            python3 ctfd_watch.py --once
+          fi
+
+      - name: Salvar estado
+        if: always() && hashFiles('ctfd_state.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: ctfd_state.json
+          key: ctfd-state-${{ hashFiles('ctfd_state.json') }}
